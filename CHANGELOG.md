@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0 - 2024-09-16]
+
+Maintenance update
+
+### Changed
+
+- Drop support of Nextcloud 26, 27
+- Update npm pkgs (security, Nextcloud Vue)
+
+
 ## [1.0.0 - 2024-04-04]
 
 ### Added
