@@ -4,55 +4,35 @@ declare(strict_types=1);
 
 namespace OCA\UsersPicker\Reference;
 
-use OC\Collaboration\Reference\LinkReferenceProvider;
-use OCP\Collaboration\Reference\ADiscoverableReferenceProvider;
-use OCP\Collaboration\Reference\Reference;
-
-use OCP\Collaboration\Reference\IReference;
-use OCP\Contacts\IManager;
-use OCP\IL10N;
-use OCP\IURLGenerator;
-
 use OCA\UsersPicker\AppInfo\Application;
 use OCP\Accounts\IAccountManager;
+
+use OCP\Collaboration\Reference\ADiscoverableReferenceProvider;
+use OCP\Collaboration\Reference\IReference;
+use OCP\Collaboration\Reference\Reference;
+
+use OCP\IL10N;
+use OCP\IURLGenerator;
 use OCP\IUserManager;
-use Psr\Log\LoggerInterface;
+use OCP\Profile\IProfileManager;
 
 class ProfilePickerReferenceProvider extends ADiscoverableReferenceProvider {
-
-	private const RICH_OBJECT_TYPE = Application::APP_ID . '_profile';
-
-	private ?string $userId;
-	private IL10N $l10n;
-	private IURLGenerator $urlGenerator;
-	private LinkReferenceProvider $linkReferenceProvider;
-	private IUserManager $userManager;
-	private IAccountManager $accountManager;
-	private IManager $contactsManager;
+	public const RICH_OBJECT_TYPE = 'users_picker_profile';
 
 	public function __construct(
-		IL10N $l10n,
-		IURLGenerator $urlGenerator,
-		LinkReferenceProvider $linkReferenceProvider,
-		IUserManager $userManager,
-		IAccountManager $accountManager,
-		IManager $contactsManager,
-		?string $userId,
-		private LoggerInterface $logger,
+		private IL10N $l10n,
+		private IURLGenerator $urlGenerator,
+		private IUserManager $userManager,
+		private IAccountManager $accountManager,
+		private IProfileManager $profileManager,
+		private ?string $userId,
 	) {
-		$this->userId = $userId;
-		$this->l10n = $l10n;
-		$this->urlGenerator = $urlGenerator;
-		$this->linkReferenceProvider = $linkReferenceProvider;
-		$this->userManager = $userManager;
-		$this->accountManager = $accountManager;
-		$this->contactsManager = $contactsManager;
 	}
 
 	/**
 	 * @inheritDoc
 	 */
-	public function getId(): string	{
+	public function getId(): string {
 		return 'profile_picker';
 	}
 
@@ -66,7 +46,7 @@ class ProfilePickerReferenceProvider extends ADiscoverableReferenceProvider {
 	/**
 	 * @inheritDoc
 	 */
-	public function getOrder(): int	{
+	public function getOrder(): int {
 		return 10;
 	}
 
@@ -94,12 +74,15 @@ class ProfilePickerReferenceProvider extends ADiscoverableReferenceProvider {
 
 		$userId = $this->getObjectId($referenceText);
 		$user = $this->userManager->get($userId);
-		$contacts = $this->contactsManager->search($userId, ['UID', 'FN', 'EMAIL'], ['types' => true]);
-		$this->logger->error('Contancts: ' . json_encode($contacts));
-
 		if ($user === null) {
-			return $this->linkReferenceProvider->resolveReference($referenceText);
+			return null;
 		}
+		if (!$this->profileManager->isProfileEnabled($user)) {
+			return null;
+		}
+		$account = $this->accountManager->getAccount($user);
+
+		$currentUser = $this->userManager->get($this->userId);
 
 		$reference = new Reference($referenceText);
 
@@ -107,18 +90,29 @@ class ProfilePickerReferenceProvider extends ADiscoverableReferenceProvider {
 		$userEmail = $user->getEMailAddress();
 		$userAvatarUrl = $this->urlGenerator->linkToRouteAbsolute('core.avatar.getAvatar', ['userId' => $userId, 'size' => '64']);
 
-		$bio = $this->accountManager->getAccount($user)->getProperty(IAccountManager::PROPERTY_BIOGRAPHY);
-		$bio = $bio->getScope() !== IAccountManager::SCOPE_PRIVATE ? $bio->getValue() : null;
-		$headline = $this->accountManager->getAccount($user)->getProperty(IAccountManager::PROPERTY_HEADLINE);
-		$location = $this->accountManager->getAccount($user)->getProperty(IAccountManager::PROPERTY_ADDRESS);
-		$website = $this->accountManager->getAccount($user)->getProperty(IAccountManager::PROPERTY_WEBSITE);
-		$organisation = $this->accountManager->getAccount($user)->getProperty(IAccountManager::PROPERTY_ORGANISATION);
-		$role = $this->accountManager->getAccount($user)->getProperty(IAccountManager::PROPERTY_ROLE);
+		$bioProperty = $account->getProperty(IAccountManager::PROPERTY_BIOGRAPHY);
+		$bio = null;
+		$fullBio = null;
+		if ($this->profileManager->isProfileFieldVisible(IAccountManager::PROPERTY_BIOGRAPHY, $user, $currentUser)) {
+			$fullBio = $bioProperty->getValue();
+			$bio = $fullBio !== ''
+				? (mb_strlen($fullBio) > 80
+					? (mb_substr($fullBio, 0, 80) . '...')
+					: $fullBio)
+				: null;
+		}
+		$headline = $account->getProperty(IAccountManager::PROPERTY_HEADLINE);
+		$location = $account->getProperty(IAccountManager::PROPERTY_ADDRESS);
+		$website = $account->getProperty(IAccountManager::PROPERTY_WEBSITE);
+		$organisation = $account->getProperty(IAccountManager::PROPERTY_ORGANISATION);
+		$role = $account->getProperty(IAccountManager::PROPERTY_ROLE);
 
 		// for clients who can't render the reference widgets
 		$reference->setTitle($userDisplayName);
 		$reference->setDescription($userEmail ?? $userDisplayName);
 		$reference->setImageUrl($userAvatarUrl);
+
+		$isLocationVisible = $this->profileManager->isProfileFieldVisible(IAccountManager::PROPERTY_ADDRESS, $user, $currentUser);
 
 		// for the Vue reference widget
 		$reference->setRichObject(
@@ -128,20 +122,21 @@ class ProfilePickerReferenceProvider extends ADiscoverableReferenceProvider {
 				'title' => $userDisplayName,
 				'subline' => $userEmail ?? $userDisplayName,
 				'email' => $userEmail,
-				'bio' => isset($bio) && $bio !== '' ? substr_replace($bio, '...', 80, strlen($bio)) : null,
-				'headline' => $headline->getScope() !== IAccountManager::SCOPE_PRIVATE ? $headline->getValue() : null,
-				'location' => $location->getScope() !== IAccountManager::SCOPE_PRIVATE ? $location->getValue() : null,
-				'location_url' => $location->getScope() !== IAccountManager::SCOPE_PRIVATE ? $this->getOpenStreetLocationUrl($location->getValue()) : null,
-				'website' => $website->getScope() !== IAccountManager::SCOPE_PRIVATE ? $website->getValue() : null,
-				'organisation' => $organisation->getScope() !== IAccountManager::SCOPE_PRIVATE ? $organisation->getValue() : null,
-				'role' => $role->getScope() !== IAccountManager::SCOPE_PRIVATE ? $role->getValue() : null,
+				'bio' => $bio,
+				'full_bio' => $fullBio,
+				'headline' => $this->profileManager->isProfileFieldVisible(IAccountManager::PROPERTY_HEADLINE, $user, $currentUser) ? $headline->getValue() : null,
+				'location' => $isLocationVisible ? $location->getValue() : null,
+				'location_url' => $isLocationVisible ? $this->getOpenStreetLocationUrl($location->getValue()) : null,
+				'website' => $this->profileManager->isProfileFieldVisible(IAccountManager::PROPERTY_WEBSITE, $user, $currentUser) ? $website->getValue() : null,
+				'organisation' => $this->profileManager->isProfileFieldVisible(IAccountManager::PROPERTY_ORGANISATION, $user, $currentUser) ? $organisation->getValue() : null,
+				'role' => $this->profileManager->isProfileFieldVisible(IAccountManager::PROPERTY_ROLE, $user, $currentUser) ? $role->getValue() : null,
 				'url' => $referenceText,
 			]
 		);
 		return $reference;
 	}
 
-	private function getObjectId(string $url): ?string {
+	public function getObjectId(string $url): ?string {
 		$baseUrl = $this->urlGenerator->getBaseUrl();
 		$baseWithIndex = $baseUrl . '/index.php';
 
@@ -157,7 +152,7 @@ class ProfilePickerReferenceProvider extends ADiscoverableReferenceProvider {
 		return null;
 	}
 
-	private function getOpenStreetLocationUrl($location) {
+	public function getOpenStreetLocationUrl($location): string {
 		return 'https://www.openstreetmap.org/search?query=' . urlencode($location);
 	}
 

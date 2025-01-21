@@ -1,7 +1,7 @@
 <template>
 	<div class="profile-reference">
 		<div class="profile-reference__wrapper">
-			<div class="profile-card__header">
+			<div class="profile-reference__wrapper__header">
 				<NcAvatar :user="richObject.user_id" :size="48" class="profile-card__avatar" />
 				<div class="profile-card__title">
 					<a :href="richObject.url" target="_blank">
@@ -20,7 +20,7 @@
 					<span v-if="richObject.location" class="location">
 						<MapMarker :size="20" />
 						<template v-if="richObject.location_url">
-							<a :href="richObject.location_url" class="link" target="_blank">{{ richObject.location }}</a>
+							<a :href="richObject.location_url" class="external" target="_blank">{{ richObject.location }}</a>
 						</template>
 						<template v-else>
 							{{ richObject.location }}
@@ -28,7 +28,7 @@
 					</span>
 					<span v-if="richObject.website" class="website">
 						<Web :size="20" />
-						<a :href="richObject.website" class="link" target="_blank">{{ richObject.website }}</a>
+						<a :href="richObject.website" class="external" target="_blank">{{ richObject.website }}</a>
 					</span>
 					<span v-if="richObject.organisation" class="organisation">
 						<Domain :size="20" />
@@ -38,7 +38,9 @@
 						<Handshake :size="20" />
 						{{ richObject.role }}
 					</span>
-					<span v-if="richObject.bio" class="bio">
+					<span v-if="richObject.bio"
+						class="bio"
+						:title="richObject.full_bio">
 						<TextAccount :size="20" />
 						{{ richObject.bio }}
 					</span>
@@ -97,68 +99,53 @@ export default {
 		display: flex;
 		align-items: center;
 		flex-direction: column;
-	}
 
-	.profile-card__header {
-		width: 100%;
-		min-height: 70px;
-		background-color: var(--color-primary);
-		background-image: var(--gradient-primary-background);
-		position: relative;
-	}
-
-	.profile-card__avatar {
-		position: relative;
-		bottom: -50%;
-		left: 10px;
-	}
-
-	.profile-card__title {
-		display: flex;
-		position: relative;
-		bottom: 5px;
-		left: 70px;
-
-		& span {
-			margin-right: 5px;
-		}
-
-		& a {
-			display: flex;
-			color: #fff;
-		}
-	}
-
-	.profile-content {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		min-height: 46px;
-		padding: 10px 10px 10px 60px;
-		width: 100%;
-	}
-
-	.headline {
-		font-style: italic;
-		padding-left: 5px;
-	}
-
-	.profile-content__subline {
-		padding: 0 0 0 10px;
-
-		& span.material-design-icon {
-			margin-right: 5px;
-		}
-
-		& > span {
+		&__header {
+			width: 100%;
+			min-height: 70px;
+			padding-left: 12px;
+			background-color: var(--color-primary);
+			background-image: var(--gradient-primary-background);
+			position: relative;
 			display: flex;
 			align-items: center;
-			margin-bottom: 5px;
+			gap: 10px;
 		}
-	}
 
-	.link {
-		text-decoration: underline;
+		.profile-card__title a {
+			display: flex;
+			align-items: center;
+			gap: 5px;
+			color: var(--color-primary-text);
+		}
+
+		.profile-content {
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			min-height: 46px;
+			padding: 10px 10px 10px 60px;
+			width: 100%;
+		}
+
+		.headline {
+			font-style: italic;
+			padding-left: 5px;
+		}
+
+		.profile-content__subline {
+			padding: 0 0 0 10px;
+
+			& span.material-design-icon {
+				margin-right: 5px;
+			}
+
+			& > span {
+				display: flex;
+				align-items: center;
+				margin-bottom: 5px;
+			}
+		}
 	}
 }
 </style>
